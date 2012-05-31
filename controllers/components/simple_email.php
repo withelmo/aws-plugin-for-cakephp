@@ -1,113 +1,156 @@
 <?php
-
 /**
- * Description of ses_component
+ * Plugin component for CakePHP: Send email with SES on AWS.
+ * 
+ * PHP versions => 5.2 , CakePHP => 1.3
+ * 
+ * Licensed under The MIT License
+ * Redistributions of files must retain the above copyright notice.
  *
- * @author SHINTARO
+ * @copyright   Copyright 2012, Shintaro Sugimoto
+ * @package     aws-plugin-for-cakephp
+ * @subpackage  aws-plugin-for-cakephp.controllers.components
+ * @version     0.2.0
+ * @since       AWS SDK for PHP 1.5.6(http://docs.amazonwebservices.com/AWSSDKforPHP/latest)
+ * @license	 MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
-App::import('Vendor', 'Amazon.sdk', array('file' => 'sdk/sdk.class.php'));
-App::import('Vendor', 'Amazon.sdk', array('file' => 'sdk/services/ses.class.php'));
+
+/*
+ * Load AWS SDK for PHP
+ */
+App::import('Vendor', 'Aws.Sdk', array('file' => 'sdk/sdk.class.php'));
+App::import('Vendor', 'Aws.Ses', array('file' => 'sdk/services/ses.class.php'));
 
 class SimpleEmailComponent extends Object {
 
     // SES Object
-    var $ses;
-    // Verify check flg
-    var $verify_check_flg = false;
+    private $ses = null;
+    
+    /**
+     * $accessKey
+     * アクセスキー
+     * 
+     * @var string AWS's access key
+     * @access public
+     */
+    public $accessKey = '';
+
+    /**
+     * $secretKey
+     * シークレットキー
+     * 
+     * @var string AWS's secret key
+     * @access public
+     */
+    public $secretKey = '';
+    
+    /**
+     * from/returnPathアドレスが認証済みかチェックする
+     * 
+     * @var boolean check verified addresses
+     * @access private
+     */
+    private $verifiedCheck = false;
+    
     // Srttings
     /* Encoding */
-    var $charset_subject = 'ISO-2022-JP';
-    var $charset_body = 'ISO-2022-JP';
-    var $charset_name = 'ISO-2022-JP';
-    var $charset_origin = 'UTF-8';
+    public $charset_subject = 'ISO-2022-JP';
+    public $charset_body = 'ISO-2022-JP';
+    public $charset_name = 'ISO-2022-JP';
+    public $charset_origin = 'UTF-8';
     private $iso_2022_jp = "ISO-2022-JP";
     private $iso_2022_jp_ms = "ISO-2022-JP-MS";
-    var $accessKey = '';
-    var $secretKey = '';
-    var $view_dir = 'email';
-    var $verified_from = array();
+    
+    public $view_dir = 'email';
+    public $verifiedAddresses = array();
     // Mail data
-    var $subject = '';
-    var $body = '';
-    var $from = '';
-    var $to = '';
-    var $cc = '';
-    var $bcc = '';
-    var $replyTo = '';
-    var $returnPath = '';
+    public $subject = '';
+    public $body = '';
+    public $from = '';
+    public $to = '';
+    public $cc = '';
+    public $bcc = '';
+    public $replyTo = '';
+    public $returnPath = '';
+    
+    private $controller;
 
-    public function __construct() {
-        parent::__construct();
+    /**
+     * initialize
+     * 
+     * @access public
+     * @param object $controller Controller instance for the request
+     * @return void
+     */
+    public function initialize(&$controller, $settings = array()) {
+        // SESインスタンスの生成
+        $this->setInstance($settings);
+
+        // 実行中のcontrollerを保持
+        $this->controller = & $controller;
     }
 
-    function initialize(&$controller, $setting = array()) {
-        // セッティングにデータがあればセットする
-        if (!empty($setting['access_key']) && !empty($setting['secret_key'])) {
-            $this->accessKey = $setting['access_key'];
-            $this->secretKey = $setting['secret_key'];
-        }
-
-        if (isset($setting['verify_check_flg'])) {
-            $this->verify_check_flg = $setting['verify_check_flg'];
-        }
-
-        // キーペアがあればインスタンス生成
-        if (!empty($this->accessKey) && !empty($this->secretKey)) {
-            $this->ses = new AmazonSES(array('key' => $this->accessKey, 'secret' => $this->secretKey));
-            if ($this->verify_check_flg) {
-                $this->verified_from = $this->verifiedList();
-            }
-        }
-        $this->Controller = & $controller;
-    }
-
-    function startup(&$controller) {
-        
+    /**
+     * startup
+     * 
+     * @access public
+     * @param object $controller Controller instance for the request
+     * @return void
+     */
+    public function startup(&$controller) {
+        // 処理なし
     }
 
     /**
      * setInstance
      * キーペアをセットしてSESインスタンスを生成
      * 
-     * @param string $access_key アクセスキー
-     * @param string $secret_key シークレットキー
-     * @return 
+     * @access public
+     * @param array $settings アクセスキー/シークレットキーを含むパラメータ
+     * @return boolean
      */
-    function setInstance($access_key = null, $secret_key = null, $verifyCheck = false) {
-        if (empty($access_key) || empty($secret_key)) {
-            return false;
-        }
-        if ($this->ses) {
-            unset($this->ses);
-        }
-
+    public function setInstance($settings) {
         // プロパティの初期化
         $this->clearParams();
         
-        $this->accessKey = $access_key;
-        $this->secretKey = $secret_key;
+        // 設定
+        $this->_set($settings);
+        
+        // キーぺがない場合は生成できないためfalse
+        if (empty($this->accessKey) || empty($this->secretKey)) {
+            return false;
+        }
+        
+        // SES Objectの初期化
+        unset($this->ses);
+        
+        // SESインスタンスの生成
         $this->ses = new AmazonSES(array('key' => $this->accessKey, 'secret' => $this->secretKey));
 
-        if (isset($verifyCheck)) {
-            $this->verify_check_flg = $verifyCheck;
-        }
-
-        if ($this->verify_check_flg) {
-            $this->verified_from = $this->verifiedList();
-
-            if ($this->verified_from === false) {
-                return false;
-            }
+        // 認証アドレスチェックをする場合は認証済みアドレスを取得セットする
+        if ($this->verifiedCheck) {
+            $this->verifiedAddresses = $this->verifiedList();
         }
         return true;
     }
 
     /**
+     * existInstance
+     * 
+     * @access private
+     * @param 
+     * @return boolean
+     */
+    private function existInstance() {
+        return is_object($this->ses);
+    }
+    
+    /**
      * clearParams
      * 
      * @access private
      * @param 
-     * @return 
+     * @return void
      */
     private function clearParams() {
         $this->accessKey = '';
@@ -127,32 +170,87 @@ class SimpleEmailComponent extends Object {
      * verifyEmail
      * メールアドレスの認証メソッド
      *
-     * @param string 認証するメールアドレス
+     * @param array|string $mails 認証するメールアドレス
      * @return boolean
      */
-    function verifyEmail($mail) {
-        if (empty($mail)) {
-            false;
+    public function verifyEmail($mails) {
+        if (!$this->existInstance() || empty($mails)) {
+            return false;
         }
 
-        $res = $this->ses->verify_email_address($mail);
-        return $res->isOK();
+        if (is_array($mails)) {
+            $results = array();
+            foreach ($mails as $key => $mail) {
+                $response = $this->ses->verify_email_identity($mail);
+                $results[] = $response->isOK();
+            }
+        } else {
+            $response = $this->ses->verify_email_identity($mails);
+            $results = $response->isOK();
+        }
+        return $results;
+    }
+
+    /**
+     * verifyDomain
+     * メールアドレスドメインの認証メソッド
+     *
+     * @param array|string $domains 認証するメールアドレスのドメイン
+     * @return boolean
+     */
+    public function verifyDomain($domains) {
+        if (!$this->existInstance() || empty($domains)) {
+            return false;
+        }
+
+        if (is_array($domains)) {
+            $results = array();
+            foreach ($domains as $key => $mail) {
+                $response = $this->ses->verify_domain_identity($mail);
+                $results[] = $response->isOK();
+            }
+        } else {
+            $response = $this->ses->verify_domain_identity($domains);
+            $results = $response->isOK();
+        }
+        return $results;
+    }
+
+    /**
+     * deleteIdentity
+     * メールアドレスの認証解除メソッド
+     *
+     * @param array|string $identities 解除するメールアドレスのドメイン
+     * @return boolean
+     */
+    public function deleteIdentity($identities) {
+        if (!$this->existInstance() || empty($identities)) {
+            return false;
+        }
+
+        if (is_array($identities)) {
+            $results = array();
+            foreach ($identities as $key => $mail) {
+                $response = $this->ses->delete_identity($mail);
+                $results[] = $response->isOK();
+            }
+        } else {
+            $response = $this->ses->delete_identity($identities);
+            $results = $response->isOK();
+        }
+        return $results;
     }
 
     /**
      * unverifyEmail
      * メールアドレスの認証解除メソッド
+     * 後方互換用
      *
-     * @param string 認証解除するメールアドレス
+     * @param array|string 認証解除するメールアドレス
      * @return boolean
      */
-    function unverifyEmail($mail) {
-        if (empty($mail)) {
-            false;
-        }
-
-        $res = $this->ses->delete_verified_email_address($mail);
-        return $res->isOK();
+    public function unverifyEmail($mails) {
+        $this->deleteIdentity($mails);
     }
 
     /**
@@ -161,8 +259,12 @@ class SimpleEmailComponent extends Object {
      *
      * @return Array
      */
-    function verifiedList() {
-        $res = $this->ses->list_verified_email_addresses();
+    public function listIdentities() {
+        if (!$this->existInstance()) {
+            return false;
+        }
+        
+        $res = $this->ses->list_identities();
         $results = Set::reverse($res->body->ListVerifiedEmailAddressesResult->VerifiedEmailAddresses);
 
         /* キーペア不正などで取得できなかった場合の処理 */
@@ -180,13 +282,34 @@ class SimpleEmailComponent extends Object {
     }
 
     /**
+     * verifiedList
+     * 認証済のメールアドレス一覧の取得メソッド
+     *
+     * @return Array
+     */
+    public function verifiedList() {
+        $this->listIdentities();
+    }
+
+    /**
+     * getidentityVerificationAttributes
+     * 
+     * @access public
+     * @param 
+     * @return 
+     */
+    public function getidentityVerificationAttributes($identities) {
+        // @todo 未実装
+    }
+    
+    /**
      * subject
      * メールサブジェクト設定メソッド
      * 
      * @param 
      * @return 
      */
-    function subject($subject) {
+    public function subject($subject) {
         if (empty($subject)) {
             return false;
         }
@@ -206,11 +329,11 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function cakeText($content = array(), $element = 'default', $layout = 'default') {
+    public function cakeText($content = array(), $element = 'default', $layout = 'default') {
         if (empty($content)) {
             return false;
         }
-        $this->view = new view($this->Controller, false);
+        $this->view = new view($this->controller, false);
         $this->view->layout = $this->view_dir . DS . 'text' . DS . $layout;
         $this->body = $this->view->renderLayout($this->view->element($this->view_dir . DS . 'text' . DS . $element, array('content' => $content)));
 
@@ -227,7 +350,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function _addNameToAddress($address = '', $name = '') {
+    public function _addNameToAddress($address = '', $name = '') {
         if (empty($address)) {
             return false;
         }
@@ -259,15 +382,15 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function from($address, $name = '') {
+    public function from($address, $name = '') {
         if (empty($address)) {
             $this->log("addressが存在しないエラー");
             return false;
         }
 
         // 送信元が認証済アドレスにない場合はエラー
-        if ($this->verify_check_flg && !in_array($address, $this->verified_from['member'])) {
-            $errorData = Set::merge(array($address, $name, $this->verified_from));
+        if ($this->verifiedCheck && !in_array($address, $this->verifiedAddresses['member'])) {
+            $errorData = Set::merge(array($address, $name, $this->verifiedAddresses));
             $this->log("送信元が認証済アドレスチェックでエラー" . print_r($errorData, true), LOG_ERROR);
             return false;
         }
@@ -288,7 +411,7 @@ class SimpleEmailComponent extends Object {
      * @param array array($address => $name)
      * @return 
      */
-    function to($address, $name = '') {
+    public function to($address, $name = '') {
         if (empty($address)) {
             return false;
         }
@@ -307,7 +430,7 @@ class SimpleEmailComponent extends Object {
      * @param array array($address => $name)
      * @return 
      */
-    function cc($address, $name = '') {
+    public function cc($address, $name = '') {
         if (empty($address)) {
             return false;
         }
@@ -332,7 +455,7 @@ class SimpleEmailComponent extends Object {
      * @param array array($address => $name)
      * @return 
      */
-    function bcc($address, $name = '') {
+    public function bcc($address, $name = '') {
         if (empty($address)) {
             return false;
         }
@@ -357,7 +480,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function replyTo($address) {
+    public function replyTo($address) {
         if (empty($address)) {
             return false;
         }
@@ -376,13 +499,13 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function returnPath($address) {
+    public function returnPath($address) {
         if (empty($address)) {
             return false;
         }
 
         // 認証済アドレスにない場合はエラー
-        if ($this->verify_check_flg && !in_array($address, $this->verified_from['member'])) {
+        if ($this->verifiedCheck && !in_array($address, $this->verifiedAddresses['member'])) {
             return false;
         }
 
@@ -401,7 +524,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function tos($tos = array()) {
+    public function tos($tos = array()) {
         if (empty($tos) || !is_array($tos)) {
             return false;
         }
@@ -419,7 +542,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function ccs($ccs = array()) {
+    public function ccs($ccs = array()) {
         if (empty($ccs) || !is_array($ccs)) {
             return false;
         }
@@ -441,7 +564,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function bccs($bccs = array()) {
+    public function bccs($bccs = array()) {
         if (empty($bccs) || !is_array($bccs)) {
             return false;
         }
@@ -465,7 +588,7 @@ class SimpleEmailComponent extends Object {
      * @param
      * @return
      */
-    function sendMail($isArray = false) {
+    public function sendMail($isArray = false) {
         if (!$mailData = $this->_setMailData()) {
             return false;
         }
@@ -487,7 +610,7 @@ class SimpleEmailComponent extends Object {
      * @param
      * @return
      */
-    function batchSendMail() {
+    public function batchSendMail() {
         if (!$mailData = $this->_setMailData()) {
             return false;
         }
@@ -497,7 +620,7 @@ class SimpleEmailComponent extends Object {
         return true;
     }
 
-    function _setMailData() {
+    public function _setMailData() {
         if (empty($this->subject) || empty($this->body) || empty($this->charset_subject) || empty($this->charset_body)) {
             return false;
         }
@@ -568,7 +691,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function batchSend($clear = true, $isArray = true) {
+    public function batchSend($clear = true, $isArray = true) {
         $results = $this->ses->batch()->send($clear);
 
         // 返り値を配列に変換
@@ -588,7 +711,7 @@ class SimpleEmailComponent extends Object {
      * @param
      * @return
      */
-    function getQuotaAll($isArray = true) {
+    public function getQuotaAll($isArray = true) {
         $res = $this->ses->get_send_quota();
 
         if ($isArray) {
@@ -604,7 +727,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function getQuotaPerSecond() {
+    public function getQuotaPerSecond() {
         if (!$this->ses) {
             return false;
         }
@@ -624,7 +747,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function getQuotaPerDay() {
+    public function getQuotaPerDay() {
         if (!$this->ses) {
             return false;
         }
@@ -643,7 +766,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function getQuotaSentLastDay() {
+    public function getQuotaSentLastDay() {
         if (!$this->ses) {
             return false;
         }
@@ -662,7 +785,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    function getSendStatistics($isArray = true) {
+    public function getSendStatistics($isArray = true) {
         $res = $this->ses->get_send_statistics();
 
         if ($isArray) {
@@ -672,5 +795,3 @@ class SimpleEmailComponent extends Object {
     }
 
 }
-
-?>

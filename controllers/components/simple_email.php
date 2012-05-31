@@ -23,12 +23,15 @@ App::import('Vendor', 'Aws.Ses', array('file' => 'sdk/services/ses.class.php'));
 
 class SimpleEmailComponent extends Object {
 
-    // SES Object
+    /**
+     * SES Object
+     *
+     * @var object SES Object
+     */
     private $ses = null;
     
     /**
-     * $accessKey
-     * アクセスキー
+     * accessKey:アクセスキー
      * 
      * @var string AWS's access key
      * @access public
@@ -36,8 +39,7 @@ class SimpleEmailComponent extends Object {
     public $accessKey = '';
 
     /**
-     * $secretKey
-     * シークレットキー
+     * secretKey:シークレットキー
      * 
      * @var string AWS's secret key
      * @access public
@@ -52,18 +54,28 @@ class SimpleEmailComponent extends Object {
      */
     private $verifiedCheck = false;
     
-    // Srttings
-    /* Encoding */
-    public $charset_subject = 'ISO-2022-JP';
-    public $charset_body = 'ISO-2022-JP';
-    public $charset_name = 'ISO-2022-JP';
-    public $charset_origin = 'UTF-8';
-    private $iso_2022_jp = "ISO-2022-JP";
-    private $iso_2022_jp_ms = "ISO-2022-JP-MS";
-    
-    public $view_dir = 'email';
+    /**
+     * verifiedAddresses
+     * 
+     * @var array verified addresses
+     */
     public $verifiedAddresses = array();
-    // Mail data
+    
+    /**
+     * Encodings
+     */
+    const UTF_8 = 'UTF-8';
+    const ISO_2022_JP = "ISO-2022-JP";
+    const ISO_2022_JP_MS = "ISO-2022-JP-MS";
+    
+    public $charsetSubject = self::ISO_2022_JP;
+    public $charsetBody = self::ISO_2022_JP;
+    public $charsetName = self::ISO_2022_JP;
+    public $charsetOrigin = self::UTF_8;
+    
+    /**
+     * Mail data
+     */
     public $subject = '';
     public $body = '';
     public $from = '';
@@ -73,6 +85,18 @@ class SimpleEmailComponent extends Object {
     public $replyTo = '';
     public $returnPath = '';
     
+    /**
+     * layout/elementファイルのディレクトリ名
+     * 
+     * @var type 
+     */
+    public $viewDir = 'email';
+    
+    /**
+     * 実行中のController
+     * 
+     * @var object
+     */
     private $controller;
 
     /**
@@ -334,8 +358,8 @@ class SimpleEmailComponent extends Object {
             return false;
         }
         $this->view = new view($this->controller, false);
-        $this->view->layout = $this->view_dir . DS . 'text' . DS . $layout;
-        $this->body = $this->view->renderLayout($this->view->element($this->view_dir . DS . 'text' . DS . $element, array('content' => $content)));
+        $this->view->layout = $this->viewDir . DS . 'text' . DS . $layout;
+        $this->body = $this->view->renderLayout($this->view->element($this->viewDir . DS . 'text' . DS . $element, array('content' => $content)));
 
         if (empty($this->body)) {
             return false;
@@ -360,11 +384,11 @@ class SimpleEmailComponent extends Object {
 
         mb_language('ja');
         $encode_origin = mb_internal_encoding();
-        mb_internal_encoding($this->charset_origin);
-        if ($this->charset_name == $this->iso_2022_jp) {
-            $namedAddress = mb_encode_mimeheader($name, $this->iso_2022_jp_ms);
+        mb_internal_encoding($this->charsetOrigin);
+        if ($this->charsetName == self::ISO_2022_JP) {
+            $namedAddress = mb_encode_mimeheader($name, self::ISO_2022_JP_MS);
         } else {
-            $namedAddress = mb_encode_mimeheader($name, $this->charset_name);
+            $namedAddress = mb_encode_mimeheader($name, $this->charsetName);
         }
         mb_internal_encoding($encode_origin);
 
@@ -621,7 +645,7 @@ class SimpleEmailComponent extends Object {
     }
 
     public function _setMailData() {
-        if (empty($this->subject) || empty($this->body) || empty($this->charset_subject) || empty($this->charset_body)) {
+        if (empty($this->subject) || empty($this->body) || empty($this->charsetSubject) || empty($this->charsetBody)) {
             return false;
         }
 
@@ -656,28 +680,28 @@ class SimpleEmailComponent extends Object {
 
         mb_language('ja');
         $encode_origin = mb_internal_encoding();
-        mb_internal_encoding($this->charset_origin);
+        mb_internal_encoding($this->charsetOrigin);
 
         // Subject
-        if ($this->charset_subject == $this->iso_2022_jp) {
+        if ($this->charsetSubject == self::ISO_2022_JP) {
             // ISO-2022-JP-MSでコンバート
-            $subject = mb_convert_encoding($this->subject, $this->iso_2022_jp_ms, $this->charset_origin);
+            $subject = mb_convert_encoding($this->subject, self::ISO_2022_JP_MS, $this->charsetOrigin);
             // ISO-2022-JP-MSで変換すると、ゴミが入る場合があるため
-            $subject = "=?" . $this->iso_2022_jp . "?B?" . base64_encode($subject) . "?=";
+            $subject = "=?" . self::ISO_2022_JP . "?B?" . base64_encode($subject) . "?=";
         } else {
-            $subject = mb_convert_encoding($this->subject, $this->charset_subject, $this->charset_origin);
+            $subject = mb_convert_encoding($this->subject, $this->charsetSubject, $this->charsetOrigin);
         }
         $message['Subject']['Data'] = $subject;
-        $message['Subject']['Charset'] = $this->charset_subject;
+        $message['Subject']['Charset'] = $this->charsetSubject;
 
         // Body
-        if ($this->charset_body == $this->iso_2022_jp) {
-            $body = mb_convert_encoding($this->body, $this->iso_2022_jp_ms, $this->charset_origin);
+        if ($this->charsetBody == self::ISO_2022_JP) {
+            $body = mb_convert_encoding($this->body, self::ISO_2022_JP_MS, $this->charsetOrigin);
         } else {
-            $body = mb_convert_encoding($this->body, $this->charset_body, $this->charset_origin);
+            $body = mb_convert_encoding($this->body, $this->charsetBody, $this->charsetOrigin);
         }
         $message['Body']['Text']['Data'] = $body;
-        $message['Body']['Text']['Charset'] = $this->charset_body;
+        $message['Body']['Text']['Charset'] = $this->charsetBody;
 
         mb_internal_encoding($encode_origin);
 

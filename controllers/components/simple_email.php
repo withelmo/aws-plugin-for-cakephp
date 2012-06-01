@@ -279,7 +279,7 @@ class SimpleEmailComponent extends Object {
 
     /**
      * verifiedList
-     * 認証済のメールアドレス一覧の取得メソッド
+     * 認証済のメールアドレス/ドメイン一覧の取得メソッド
      *
      * @return Array
      */
@@ -289,8 +289,8 @@ class SimpleEmailComponent extends Object {
         }
         
         $res = $this->ses->list_identities();
-        $results = Set::reverse($res->body->ListVerifiedEmailAddressesResult->VerifiedEmailAddresses);
-
+        $results = Set::reverse($res->body->ListIdentitiesResult->Identities);
+        
         /* キーペア不正などで取得できなかった場合の処理 */
         if (is_null($results)) {
             return false;
@@ -306,14 +306,65 @@ class SimpleEmailComponent extends Object {
     }
 
     /**
+    * listEmailIdentities
+    * 認証済みのメールアドレスのみを取得（ドメインは除く）
+    * 
+    * @access public
+    * @param 
+    * @return 
+    */
+    public function listEmailIdentities() {
+        $results = $this->listIdentities();
+
+        $mails = array();
+        if (!empty($results['member'])) {
+            foreach ($results['member'] as $identity) {
+                if (strstr($identity, '@')) {
+                    $mails['member'][] =  $identity;
+                }
+            }
+        } else {
+            $mails = $results;
+        }
+
+        return $mails;
+    }
+
+    /**
+    * listDomainIdentities
+    * 認証済みのドメインのみを取得（メールアドレスは除く）
+    * 
+    * @access public
+    * @param 
+    * @return 
+    */
+    public function listDomainIdentities() {
+        $results = $this->listIdentities();
+
+        $domains = array();
+        if (!empty($results['member'])) {
+            foreach ($results['member'] as $identity) {
+                if (!strstr($identity, '@')) {
+                    $domains['member'][] =  $identity;
+                }
+            }
+        } else {
+            $domains = $results;
+        }
+
+        return $domains;
+    }
+
+    /**
      * verifiedList
      * 認証済のメールアドレス一覧の取得メソッド
      *
      * @return Array
      */
     public function verifiedList() {
-        $this->listIdentities();
+        $this->listEmailIdentities();
     }
+    
 
     /**
      * getidentityVerificationAttributes
@@ -322,7 +373,7 @@ class SimpleEmailComponent extends Object {
      * @param 
      * @return 
      */
-    public function getidentityVerificationAttributes($identities) {
+    public function getIdentityVerificationAttributes($identities) {
         // @todo 未実装
     }
     

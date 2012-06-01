@@ -898,16 +898,70 @@ class SimpleEmailComponent extends Object {
      * getSendStatistics
      * 送信履歴統計情報の取得
      * 
+     * @access public
      * @param 
      * @return 
      */
     public function getSendStatistics($isArray = true) {
+        if (!$this->__existInstance()) {
+            return false;
+        }
+
         $res = $this->__Ses->get_send_statistics();
 
-        if ($isArray) {
-            $res = Set::reverse($res->body);
+        if (!$isArray) {
+            return $res;
+        }
+
+        $res = Set::reverse($res->body->GetSendStatisticsResult->SendDataPoints);
+
+        if (!empty($res['member'])) {
+            $res = $res['member'];
+
+            // タイムスタンプの降順にソート
+            usort($res, function($a, $b) {
+                        return $a['Timestamp'] > $b['Timestamp'];
+                    });
         }
         return $res;
+    }
+
+    /**
+     * getSendStatisticsTotal
+     * 送信履歴統計情報合計データの取得
+     * 
+     * @access public
+     * @param 
+     * @return array
+     */
+    public function getSendStatisticsTotal() {
+        $statistics = $this->getSendStatistics(true);
+        
+        $total = array(
+            'startDate' => '',
+            'endDate' => '',
+            'DeliveryAttempts' => 0,
+            'Rejects' => 0,
+            'Bounces' => 0,
+            'Complaints' => 0,
+        );
+        
+        foreach ($statistics as $key => $value) {
+            if ($key == 0) {
+                $total['startDate'] = $value['Timestamp'];
+            }
+            
+            if ($key == (count($statistics) - 1)) {
+                $total['endDate'] = $value['Timestamp'];
+            }
+            
+            $total['DeliveryAttempts'] += $value['DeliveryAttempts'];
+            $total['Rejects'] += $value['Rejects'];
+            $total['Bounces'] += $value['Bounces'];
+            $total['Complaints'] += $value['Complaints'];
+        }
+        
+        return $total;
     }
 
 }

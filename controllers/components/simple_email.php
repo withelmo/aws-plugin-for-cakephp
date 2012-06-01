@@ -50,9 +50,9 @@ class SimpleEmailComponent extends Object {
      * from/returnPathアドレスが認証済みかチェックする
      * 
      * @var boolean check verified addresses
-     * @access private
+     * @access public
      */
-    private $__verifiedCheck = false;
+    public $verifiedCheck = false;
     
     /**
      * verifiedAddresses
@@ -151,8 +151,12 @@ class SimpleEmailComponent extends Object {
         // SESインスタンスの生成
         $this->__Ses = new AmazonSES(array('key' => $this->accessKey, 'secret' => $this->secretKey));
 
+        if (!$this->__existInstance()) {
+            return false;
+        }
+        
         // 認証アドレスチェックをする場合は認証済みアドレスを取得セットする
-        if ($this->__verifiedCheck) {
+        if ($this->verifiedCheck) {
             $this->verifiedAddresses = $this->verifiedList();
         }
         return true;
@@ -369,7 +373,7 @@ class SimpleEmailComponent extends Object {
      * @return array
      */
     public function verifiedList() {
-        $this->listEmailIdentities();
+        return $this->listEmailIdentities();
     }
     
 
@@ -476,7 +480,7 @@ class SimpleEmailComponent extends Object {
         }
 
         // 送信元が認証済アドレスにない場合はエラー
-        if ($this->__verifiedCheck && !in_array($address, $this->verifiedAddresses['member'])) {
+        if ($this->verifiedCheck && !in_array($address, $this->verifiedAddresses['member'])) {
             $errorData = Set::merge(array($address, $name, $this->verifiedAddresses));
             $this->log("送信元が認証済アドレスチェックでエラー" . print_r($errorData, true), LOG_ERROR);
             return false;
@@ -501,15 +505,7 @@ class SimpleEmailComponent extends Object {
      * @return boolean
      */
     public function to($address, $name = '') {
-        if (empty($address)) {
-            return false;
-        }
-        $this->to = $this->__addNameToAddress($address, $name);
-
-        if (empty($this->to)) {
-            return false;
-        }
-        return true;
+        return $this->__setAddress('to', $address, $name);
     }
 
     /**
@@ -522,21 +518,7 @@ class SimpleEmailComponent extends Object {
      * @return boolean
      */
     public function cc($address, $name = '') {
-        if (empty($address)) {
-            return false;
-        }
-
-        // 複数設定がある場合
-        if (is_array($address)) {
-            return $this->ccs($address);
-        }
-
-        $this->cc = $this->__addNameToAddress($address, $name);
-
-        if (empty($this->cc)) {
-            return false;
-        }
-        return true;
+        return $this->__setAddress('cc', $address, $name);
     }
 
     /**
@@ -549,23 +531,45 @@ class SimpleEmailComponent extends Object {
      * @return boolean
      */
     public function bcc($address, $name = '') {
-        if (empty($address)) {
-            return false;
-        }
-
-        // 複数設定がある場合
-        if (is_array($address)) {
-            return $this->bccs($address);
-        }
-
-        $this->bcc = $this->__addNameToAddress($address, $name);
-
-        if (empty($this->bcc)) {
-            return false;
-        }
-        return true;
+        return $this->__setAddress('bcc', $address, $name);
     }
 
+        /**
+     * tos
+     * 複数送信先アドレスの設定メソッド
+     * 
+     * @access public
+     * @param array $addresses array('address1' => 'name1', 'address3' => 'name2', ...)
+     * @return array
+     */
+    public function tos($addresses = array()) {
+       return $this->to($addresses);
+    }
+
+    /**
+     * cc
+     * 複数cc送信先アドレスの設定メソッド
+     * 
+     * @access public
+     * @param array $tos array('address1' => 'name1', 'address3' => 'name2', ...)
+     * @return array
+     */
+    public function ccs($addresses = array()) {
+        return $this->cc($addresses);
+    }
+
+    /**
+     * bcc
+     * 複数bcc送信先アドレスの設定メソッド
+     * 
+     * @access public
+     * @param array $tos array('address1' => 'name1', 'address3' => 'name2', ...)
+     * @return array
+     */
+    public function bccs($addresses = array()) {
+        return $this->bcc($addresses);
+    }
+    
     /**
      * replyTo
      * 返信先アドレスの設定メソッド
@@ -601,7 +605,7 @@ class SimpleEmailComponent extends Object {
         }
 
         // 認証済アドレスにない場合はエラー
-        if ($this->__verifiedCheck && !in_array($address, $this->verifiedAddresses['member'])) {
+        if ($this->verifiedCheck && !in_array($address, $this->verifiedAddresses['member'])) {
             return false;
         }
 
@@ -613,73 +617,41 @@ class SimpleEmailComponent extends Object {
         return true;
     }
 
-    /**
-     * tos
-     * 複数送信先アドレスの設定メソッド
+        /**
+     * __setAddress
      * 
-     * @access public
-     * @param array $tos array('address1' => 'name1', 'address3' => 'name2', ...)
-     * @return array
+     * @access private
+     * @param string $type メールアドレスのタイプ(to/cc/bcc)
+     * @return 
      */
-    public function tos($tos = array()) {
-        if (empty($tos) || !is_array($tos)) {
+    private function __setAddress($type, $address, $name) {
+        if (empty($type) || empty($address)) {
             return false;
         }
 
-        foreach ($tos as $address => $name) {
-            $this->to[] = $this->__addNameToAddress($address, $name);
-        }
-        return $this->to;
-    }
+        if (is_array($address)) {
+            foreach ($address as $addr => $name) {
+                // keyにメールアドレスが設定されているかは型がstringかどうかで判定
+                if (!is_string($addr)) {
+                    // メールアドレスだけの配列指定の場合は$addrがintegerであるという
+                    // 緩い判定にしている
+                    // この場合、$nameにメールアドレスが入っているので代入
+                    $addr = $name;
+                    $name = '';
+                }
 
-    /**
-     * cc
-     * 複数cc送信先アドレスの設定メソッド
-     * 
-     * @access public
-     * @param array $tos array('address1' => 'name1', 'address3' => 'name2', ...)
-     * @return array
-     */
-    public function ccs($ccs = array()) {
-        if (empty($ccs) || !is_array($ccs)) {
-            return false;
-        }
-
-        if (empty($ccs[0])) {
-            foreach ($ccs as $name => $address) {
-                $this->cc[] = $this->__addNameToAddress($address, $name);
+                $this->{$type}[] = $this->__addNameToAddress($addr, $name);
             }
         } else {
-            $this->cc = $ccs;
+            $this->{$type} = (array) $this->__addNameToAddress($address, $name);
         }
-        return $this->cc;
-    }
 
-    /**
-     * bcc
-     * 複数bcc送信先アドレスの設定メソッド
-     * 
-     * @access public
-     * @param array $tos array('address1' => 'name1', 'address3' => 'name2', ...)
-     * @return array
-     */
-    public function bccs($bccs = array()) {
-        if (empty($bccs) || !is_array($bccs)) {
+        if (empty($this->{$type})) {
             return false;
         }
-
-        if (empty($bccs[0])) {
-            // 送信先名との配列の場合
-            foreach ($bccs as $name => $address) {
-                $this->bcc[] = $this->__addNameToAddress($address, $name);
-            }
-        } else {
-            $this->bcc = $bccs;
-        }
-
-        return $this->bcc;
+        return true;
     }
-
+    
     /**
      * sendMail
      * メール送信メソッド
@@ -846,10 +818,10 @@ class SimpleEmailComponent extends Object {
 
         $quota = $this->getQuotaAll();
 
-        if (empty($quota['GetSendQuotaResult']['MaxSendRate'])) {
+        if (empty($quota['MaxSendRate'])) {
             return false;
         }
-        return $quota['GetSendQuotaResult']['MaxSendRate'];
+        return $quota['MaxSendRate'];
     }
 
     /**
@@ -867,10 +839,10 @@ class SimpleEmailComponent extends Object {
 
         $quota = $this->getQuotaAll();
 
-        if (empty($quota['GetSendQuotaResult']['Max24HourSend'])) {
+        if (empty($quota['Max24HourSend'])) {
             return false;
         }
-        return $quota['GetSendQuotaResult']['Max24HourSend'];
+        return $quota['Max24HourSend'];
     }
 
     /**
@@ -888,10 +860,10 @@ class SimpleEmailComponent extends Object {
         
         $quota = $this->getQuotaAll();
 
-        if (empty($quota['GetSendQuotaResult']['SentLast24Hours'])) {
+        if (empty($quota['SentLast24Hours'])) {
             return false;
         }
-        return $quota['GetSendQuotaResult']['SentLast24Hours'];
+        return $quota['SentLast24Hours'];
     }
 
     /**
@@ -938,8 +910,8 @@ class SimpleEmailComponent extends Object {
         $statistics = $this->getSendStatistics(true);
         
         $total = array(
-            'startDate' => '',
-            'endDate' => '',
+            'StartDate' => '',
+            'EndDate' => '',
             'DeliveryAttempts' => 0,
             'Rejects' => 0,
             'Bounces' => 0,
@@ -948,11 +920,11 @@ class SimpleEmailComponent extends Object {
         
         foreach ($statistics as $key => $value) {
             if ($key == 0) {
-                $total['startDate'] = $value['Timestamp'];
+                $total['StartDate'] = $value['Timestamp'];
             }
             
             if ($key == (count($statistics) - 1)) {
-                $total['endDate'] = $value['Timestamp'];
+                $total['EndDate'] = $value['Timestamp'];
             }
             
             $total['DeliveryAttempts'] += $value['DeliveryAttempts'];

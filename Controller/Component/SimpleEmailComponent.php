@@ -2,7 +2,7 @@
 /**
  * Plugin component for CakePHP: Send email with SES on AWS.
  * 
- * PHP versions => 5.2 , CakePHP => 1.3
+ * PHP versions => 5.2 , CakePHP => 2.1.3
  * 
  * Licensed under The MIT License
  * Redistributions of files must retain the above copyright notice.
@@ -10,7 +10,7 @@
  * @copyright   Copyright 2012, Shintaro Sugimoto
  * @package     aws-plugin-for-cakephp
  * @subpackage  aws-plugin-for-cakephp.controllers.components
- * @version     0.2.0
+ * @version     0.0.1
  * @since       AWS SDK for PHP 1.5.6(http://docs.amazonwebservices.com/AWSSDKforPHP/latest)
  * @license	 MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
@@ -21,7 +21,12 @@
 App::import('Vendor', 'Aws.Sdk', array('file' => 'sdk/sdk.class.php'));
 App::import('Vendor', 'Aws.Ses', array('file' => 'sdk/services/ses.class.php'));
 
-class SimpleEmailComponent extends Object {
+/*
+ * Load Xml Class
+ */
+App::uses('Xml', 'Utility');
+
+class SimpleEmailComponent extends Component {
 
     /**
      * SES Object
@@ -86,11 +91,11 @@ class SimpleEmailComponent extends Object {
     public $returnPath = '';
     
     /**
-     * layout/elementファイルのディレクトリ名
+     * メールテンプレートファイルのディレクトリ名
      * 
      * @var type 
      */
-    public $viewDir = 'email';
+    public $viewDir = 'Emails';
     
     /**
      * 実行中のController
@@ -419,9 +424,14 @@ class SimpleEmailComponent extends Object {
         if (empty($content)) {
             return false;
         }
-        $this->view = new view($this->__Controller, false);
-        $this->view->layout = $this->viewDir . DS . 'text' . DS . $layout;
-        $this->body = $this->view->renderLayout($this->view->element($this->viewDir . DS . 'text' . DS . $element, array('content' => $content)));
+        
+        $View = new View($this->__Controller, false);
+        $View->viewPath = $this->viewDir;
+        $View->set(array('content' => $content));
+        $c = $View->render('text' . DS . $element, false);
+        
+        $View->layoutPath = $this->viewDir . DS . 'text';
+        $this->body = $View->renderLayout($c);
 
         if (empty($this->body)) {
             return false;

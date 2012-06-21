@@ -414,6 +414,27 @@ class SimpleEmailComponent extends Component {
     }
 
     /**
+     * body
+     * 
+     * @access public
+     * @param 
+     * @return 
+     */
+    public function body($body) {
+        if (empty($body)) {
+            return false;
+        }
+        
+        $this->body = $body;
+        
+        if (empty($this->body)) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
      * cakeText
      * メール本文とテンプレート設定メソッド
      * 
@@ -428,11 +449,9 @@ class SimpleEmailComponent extends Component {
         $View = new View($this->__Controller, false);
         $View->viewPath = $this->viewDir;
         $View->set(array('content' => $content));
-        $c = $View->render('text' . DS . $element, false);
-        
         $View->layoutPath = $this->viewDir . DS . 'text';
-        $this->body = $View->renderLayout($c);
-
+        $this->body = $View->render('text' . DS . $element, $layout);
+        
         if (empty($this->body)) {
             return false;
         }

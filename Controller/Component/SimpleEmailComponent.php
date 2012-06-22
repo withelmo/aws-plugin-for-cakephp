@@ -447,10 +447,10 @@ class SimpleEmailComponent extends Component {
         }
         
         $View = new View($this->__Controller, false);
-        $View->viewPath = $this->viewDir;
+        $View->hasRendered = false;
         $View->set(array('content' => $content));
-        $View->layoutPath = $this->viewDir . DS . 'text';
-        $this->body = $View->render('text' . DS . $element, $layout);
+        $View->viewPath = $View->layoutPath = $this->viewDir . DS . 'text';
+        $this->body = $View->render($element, $layout);
         
         if (empty($this->body)) {
             return false;

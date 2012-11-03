@@ -9,8 +9,7 @@
  * Redistributions of files must retain the above copyright notice.
  *
  * @copyright   Copyright 2012, Shintaro Sugimoto
- * @package     aws-plugin-for-cakephp
- * @subpackage  aws-plugin-for-cakephp.controllers.components
+ * @package     app.Lib.Network.Email
  * @version     0.0.1
  * @since       AWS SDK for PHP 1.5.6(http://docs.amazonwebservices.com/AWSSDKforPHP/latest)
  * @license	 MIT License (http://www.opensource.org/licenses/mit-license.php)

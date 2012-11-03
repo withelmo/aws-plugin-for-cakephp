@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Plugin component for CakePHP: Send email with SES on AWS.
  * 
@@ -14,19 +15,17 @@
  * @since       AWS SDK for PHP 1.5.6(http://docs.amazonwebservices.com/AWSSDKforPHP/latest)
  * @license	 MIT License (http://www.opensource.org/licenses/mit-license.php)
  */
-
 /*
  * Load AWS SDK for PHP
  */
-App::import('Vendor', 'Aws.Sdk', array('file' => 'sdk/sdk.class.php'));
-App::import('Vendor', 'Aws.Ses', array('file' => 'sdk/services/ses.class.php'));
+require_once VENDORS . 'AWSSDK/sdk.class.php';
 
 /*
  * Load Xml Class
  */
 App::uses('Xml', 'Utility');
 
-class SimpleEmailComponent extends Component {
+class SimpleEmail {
 
     /**
      * SES Object
@@ -34,7 +33,7 @@ class SimpleEmailComponent extends Component {
      * @var object SES Object
      */
     private $__Ses = null;
-    
+
     /**
      * accessKey:アクセスキー
      * 
@@ -50,7 +49,7 @@ class SimpleEmailComponent extends Component {
      * @access public
      */
     public $secretKey = '';
-    
+
     /**
      * from/returnPathアドレスが認証済みかチェックする
      * 
@@ -58,26 +57,27 @@ class SimpleEmailComponent extends Component {
      * @access public
      */
     public $verifiedCheck = false;
-    
+
     /**
      * verifiedAddresses
      * 
      * @var array verified addresses
      */
     public $verifiedAddresses = array();
-    
+
     /**
      * Encodings
      */
+
     const UTF_8 = 'UTF-8';
     const ISO_2022_JP = "ISO-2022-JP";
     const ISO_2022_JP_MS = "ISO-2022-JP-MS";
-    
+
     public $charsetSubject = self::ISO_2022_JP;
     public $charsetBody = self::ISO_2022_JP;
     public $charsetName = self::ISO_2022_JP;
     public $charsetOrigin = self::UTF_8;
-    
+
     /**
      * Mail data
      */
@@ -89,45 +89,51 @@ class SimpleEmailComponent extends Component {
     public $bcc = '';
     public $replyTo = '';
     public $returnPath = '';
-    
+
     /**
      * メールテンプレートファイルのディレクトリ名
      * 
      * @var type 
      */
     public $viewDir = 'Emails';
-    
-    /**
-     * 実行中のController
-     * 
-     * @var object
-     */
-    private $__Controller;
 
     /**
-     * initialize
-     * 
-     * @access public
-     * @param object $controller Controller instance for the request
-     * @return void
+     * View for render
+     *
+     * @var string
      */
-    public function initialize(&$controller, $settings = array()) {
-        // SESインスタンスの生成
-        $this->setInstance($settings);
-
-        // 実行中のcontrollerを保持
-        $this->__Controller = & $controller;
-    }
+    protected $_viewRender = 'View';
 
     /**
-     * startup
+     * configs
      * 
-     * @access public
-     * @param object $controller Controller instance for the request
-     * @return void
      */
-    public function startup(&$controller) {
-        // 処理なし
+    protected $_config = array();
+
+    /**
+     * Type of message - HTML
+     *
+     * @constant MESSAGE_HTML
+     */
+
+    const MESSAGE_HTML = 'html';
+
+    /**
+     * Type of message - TEXT
+     *
+     * @constant MESSAGE_TEXT
+     */
+    const MESSAGE_TEXT = 'text';
+
+    /**
+     * __construct
+     * 
+     */
+    public function __construct($config = array()) {
+        if (!empty($config)) {
+            // SESインスタンスの生成
+            $this->setInstance($config);
+        }
     }
 
     /**
@@ -135,36 +141,74 @@ class SimpleEmailComponent extends Component {
      * キーペアをセットしてSESインスタンスを生成
      * 
      * @access public
-     * @param array $settings アクセスキー/シークレットキーを含むパラメータ
+     * @param array $config アクセスキー/シークレットキーを含むパラメータ
      * @return boolean
      */
-    public function setInstance($settings) {
+    public function setInstance($config = array()) {
         // プロパティの初期化
-        $this->__clearParams();
-        
+//        $this->reset();
+
         // 設定
-        $this->_set($settings);
-        
+        $this->config($config);
+
         // キーぺがない場合は生成できないためfalse
         if (empty($this->accessKey) || empty($this->secretKey)) {
             return false;
         }
-        
-        // SES Objectの初期化
-        unset($this->__Ses);
-        
+
         // SESインスタンスの生成
         $this->__Ses = new AmazonSES(array('key' => $this->accessKey, 'secret' => $this->secretKey));
 
         if (!$this->__existInstance()) {
             return false;
         }
-        
+
         // 認証アドレスチェックをする場合は認証済みアドレスを取得セットする
         if ($this->verifiedCheck) {
             $this->verifiedAddresses = $this->verifiedList();
         }
         return true;
+    }
+
+    /**
+     * 
+     * @param type $config
+     * @return \SimpleEmail
+     */
+    public function config($config = null) {
+        if ($config === null) {
+            return $this->_config;
+        }
+        if (!is_array($config)) {
+            $config = (string) $config;
+        }
+
+        $this->_applyConfig($config);
+        return $this;
+    }
+
+    protected function _applyConfig($config) {
+        if (is_string($config)) {
+            // email.php内の設定を読み込む場合
+            if (!class_exists('EmailConfig') && !config('email')) {
+                throw new ConfigureException(__d('cake_dev', '%s not found.', APP . 'Config' . DS . 'email.php'));
+            }
+            $configs = new EmailConfig();
+            if (!isset($configs->{$config})) {
+                throw new ConfigureException(__d('cake_dev', 'Unknown email configuration "%s".', $config));
+            }
+            $config = $configs->{$config};
+        }
+        
+        $this->_config += $config;
+
+        if (!empty($config['accessKey'])) {
+            $this->accessKey =  $config['accessKey'];
+        }
+        
+        if (!empty($config['secretKey'])) {
+            $this->secretKey = $config['secretKey'];
+        }
     }
 
     /**
@@ -177,7 +221,7 @@ class SimpleEmailComponent extends Component {
     private function __existInstance() {
         return is_object($this->__Ses);
     }
-    
+
     /**
      * clearParams
      * 
@@ -185,8 +229,11 @@ class SimpleEmailComponent extends Component {
      * @param 
      * @return void
      */
-    private function __clearParams() {
+    public function reset() {
         // @todo リファクタリング
+        // SES Objectの初期化
+        $this->__Ses = null;
+
         $this->accessKey = '';
         $this->secretKey = '';
         // Mail data
@@ -198,6 +245,8 @@ class SimpleEmailComponent extends Component {
         $this->bcc = '';
         $this->replyTo = '';
         $this->returnPath = '';
+        
+        $this->_config = array();
     }
 
     /**
@@ -303,10 +352,10 @@ class SimpleEmailComponent extends Component {
         if (!$this->__existInstance()) {
             return false;
         }
-        
+
         $res = $this->__Ses->list_identities();
         $results = Set::reverse($res->body->ListIdentitiesResult->Identities);
-        
+
         /* キーペア不正などで取得できなかった場合の処理 */
         if (is_null($results)) {
             return false;
@@ -322,13 +371,13 @@ class SimpleEmailComponent extends Component {
     }
 
     /**
-    * listEmailIdentities
-    * 認証済みのメールアドレスのみを取得（ドメインは除く）
-    * 
-    * @access public
-    * @param 
-    * @return array
-    */
+     * listEmailIdentities
+     * 認証済みのメールアドレスのみを取得（ドメインは除く）
+     * 
+     * @access public
+     * @param 
+     * @return array
+     */
     public function listEmailIdentities() {
         $results = $this->listIdentities();
 
@@ -336,7 +385,7 @@ class SimpleEmailComponent extends Component {
         if (!empty($results['member'])) {
             foreach ($results['member'] as $identity) {
                 if (strstr($identity, '@')) {
-                    $mails['member'][] =  $identity;
+                    $mails['member'][] = $identity;
                 }
             }
         } else {
@@ -347,13 +396,13 @@ class SimpleEmailComponent extends Component {
     }
 
     /**
-    * listDomainIdentities
-    * 認証済みのドメインのみを取得（メールアドレスは除く）
-    * 
-    * @access public
-    * @param 
-    * @return 
-    */
+     * listDomainIdentities
+     * 認証済みのドメインのみを取得（メールアドレスは除く）
+     * 
+     * @access public
+     * @param 
+     * @return 
+     */
     public function listDomainIdentities() {
         $results = $this->listIdentities();
 
@@ -361,7 +410,7 @@ class SimpleEmailComponent extends Component {
         if (!empty($results['member'])) {
             foreach ($results['member'] as $identity) {
                 if (!strstr($identity, '@')) {
-                    $domains['member'][] =  $identity;
+                    $domains['member'][] = $identity;
                 }
             }
         } else {
@@ -380,7 +429,6 @@ class SimpleEmailComponent extends Component {
     public function verifiedList() {
         return $this->listEmailIdentities();
     }
-    
 
     /**
      * getidentityVerificationAttributes
@@ -392,7 +440,7 @@ class SimpleEmailComponent extends Component {
     public function getIdentityVerificationAttributes($identities) {
         // @todo 未実装
     }
-    
+
     /**
      * subject
      * メールサブジェクト設定メソッド
@@ -410,7 +458,7 @@ class SimpleEmailComponent extends Component {
         if (empty($this->subject)) {
             return false;
         }
-        return true;
+        return $this;
     }
 
     /**
@@ -424,16 +472,16 @@ class SimpleEmailComponent extends Component {
         if (empty($body)) {
             return false;
         }
-        
+
         $this->body = $body;
-        
+
         if (empty($this->body)) {
             return false;
         }
-        
+
         return true;
     }
-    
+
     /**
      * cakeText
      * メール本文とテンプレート設定メソッド
@@ -445,17 +493,25 @@ class SimpleEmailComponent extends Component {
         if (empty($content)) {
             return false;
         }
-        
-        $View = new View($this->__Controller, false);
+
+        $viewClass = $this->_viewRender;
+        if ($viewClass !== 'View') {
+            list($plugin, $viewClass) = pluginSplit($viewClass, true);
+            $viewClass .= 'View';
+            App::uses($viewClass, $plugin . 'View');
+        }
+
+        $View = new $viewClass(null);
+
         $View->hasRendered = false;
         $View->set(array('content' => $content));
-        $View->viewPath = $View->layoutPath = $this->viewDir . DS . 'text';
+        $View->viewPath = $View->layoutPath = $this->viewDir . DS . self::MESSAGE_TEXT;
         $this->body = $View->render($element, $layout);
-        
+
         if (empty($this->body)) {
             return false;
         }
-        return true;
+        return $this;
     }
 
     /**
@@ -502,10 +558,9 @@ class SimpleEmailComponent extends Component {
      * @param string $name
      * @return boolean
      */
-    public function from($address, $name = '') {
-        if (empty($address)) {
-            $this->log("addressが存在しないエラー");
-            return false;
+    public function from($address = null, $name = null) {
+        if ($address === null) {
+            return $this->from;
         }
 
         // 送信元が認証済アドレスにない場合はエラー
@@ -521,7 +576,7 @@ class SimpleEmailComponent extends Component {
             $this->log("this->formが空でエラー");
             return false;
         }
-        return true;
+        return $this;
     }
 
     /**
@@ -533,7 +588,11 @@ class SimpleEmailComponent extends Component {
      * @param string $name
      * @return boolean
      */
-    public function to($address, $name = '') {
+    public function to($address = null, $name = null) {
+        if ($address === null) {
+            return $this->to;
+        }
+        
         return $this->__setAddress('to', $address, $name);
     }
 
@@ -563,7 +622,7 @@ class SimpleEmailComponent extends Component {
         return $this->__setAddress('bcc', $address, $name);
     }
 
-        /**
+    /**
      * tos
      * 複数送信先アドレスの設定メソッド
      * 
@@ -572,7 +631,7 @@ class SimpleEmailComponent extends Component {
      * @return array
      */
     public function tos($addresses = array()) {
-       return $this->to($addresses);
+        return $this->to($addresses);
     }
 
     /**
@@ -598,7 +657,7 @@ class SimpleEmailComponent extends Component {
     public function bccs($addresses = array()) {
         return $this->bcc($addresses);
     }
-    
+
     /**
      * replyTo
      * 返信先アドレスの設定メソッド
@@ -646,7 +705,7 @@ class SimpleEmailComponent extends Component {
         return true;
     }
 
-        /**
+    /**
      * __setAddress
      * 
      * @access private
@@ -678,9 +737,9 @@ class SimpleEmailComponent extends Component {
         if (empty($this->{$type})) {
             return false;
         }
-        return true;
+        return $this;
     }
-    
+
     /**
      * sendMail
      * メール送信メソッド
@@ -823,7 +882,7 @@ class SimpleEmailComponent extends Component {
         if (!$this->__existInstance()) {
             return false;
         }
-        
+
         $res = $this->__Ses->get_send_quota();
 
         if ($isArray) {
@@ -886,7 +945,7 @@ class SimpleEmailComponent extends Component {
         if (!$this->__existInstance()) {
             return false;
         }
-        
+
         $quota = $this->getQuotaAll();
 
         if (empty($quota['SentLast24Hours'])) {
@@ -937,7 +996,7 @@ class SimpleEmailComponent extends Component {
      */
     public function getSendStatisticsTotal() {
         $statistics = $this->getSendStatistics(true);
-        
+
         $total = array(
             'StartDate' => '',
             'EndDate' => '',
@@ -946,22 +1005,22 @@ class SimpleEmailComponent extends Component {
             'Bounces' => 0,
             'Complaints' => 0,
         );
-        
+
         foreach ($statistics as $key => $value) {
             if ($key == 0) {
                 $total['StartDate'] = $value['Timestamp'];
             }
-            
+
             if ($key == (count($statistics) - 1)) {
                 $total['EndDate'] = $value['Timestamp'];
             }
-            
+
             $total['DeliveryAttempts'] += $value['DeliveryAttempts'];
             $total['Rejects'] += $value['Rejects'];
             $total['Bounces'] += $value['Bounces'];
             $total['Complaints'] += $value['Complaints'];
         }
-        
+
         return $total;
     }
 

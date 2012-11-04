@@ -125,6 +125,12 @@ class SimpleEmail {
     const MESSAGE_TEXT = 'text';
 
     /**
+     * 
+     */
+    protected $_emailFormat = 'text';
+
+
+    /**
      * __construct
      * 
      */
@@ -489,6 +495,21 @@ class SimpleEmail {
      * @return 
      */
     public function cakeText($content = array(), $element = 'default', $layout = 'default') {
+        $this->content($content, $element, $layout, self::MESSAGE_TEXT);
+    }
+
+    /**
+     * cakeHtml
+     * メール本文とテンプレート設定メソッド
+     * 
+     * @param 
+     * @return 
+     */
+    public function cakeHtml($content = array(), $element = 'default', $layout = 'default') {
+        $this->content($content, $element, $layout, self::MESSAGE_HTML);
+    }
+
+    function content($content = array(), $element = 'default', $layout = 'default', $emailFormat = 'text') {
         if (empty($content)) {
             return false;
         }
@@ -504,15 +525,17 @@ class SimpleEmail {
 
         $View->hasRendered = false;
         $View->set(array('content' => $content));
-        $View->viewPath = $View->layoutPath = $this->viewDir . DS . self::MESSAGE_TEXT;
+        $View->viewPath = $View->layoutPath = $this->viewDir . DS . $emailFormat;
         $this->body = $View->render($element, $layout);
 
         if (empty($this->body)) {
             return false;
         }
+        
+        $this->_emailFormat = $emailFormat;
         return $this;
     }
-
+    
     /**
      * addNameToAddress
      * メールアドレスに名前を追加するメソッド
@@ -841,8 +864,14 @@ class SimpleEmail {
         } else {
             $body = mb_convert_encoding($this->body, $this->charsetBody, $this->charsetOrigin);
         }
-        $message['Body']['Text']['Data'] = $body;
-        $message['Body']['Text']['Charset'] = $this->charsetBody;
+        
+        if ($this->_emailFormat === self::MESSAGE_TEXT) {
+            $message['Body']['Text']['Data'] = $body;
+            $message['Body']['Text']['Charset'] = $this->charsetBody;
+        } elseif ($this->_emailFormat === self::MESSAGE_HTML) {
+            $message['Body']['Html']['Data'] = $body;
+            $message['Body']['Html']['Charset'] = $this->charsetBody;
+        }
 
         mb_internal_encoding($encode_origin);
 

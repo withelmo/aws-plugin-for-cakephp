@@ -1,0 +1,15 @@
+{
+    "name": "withelmo/aws-plugin-for-cakephp",
+    "description": "AWS plugin for CakePHP",
+    "type": "cakephp-plugin",
+    "keywords": ["cakephp", "AWS"],
+    "homepage": "https://github.com/withelmo/aws-plugin-for-cakephp",
+    "license": "MIT",
+    "authors": [
+	{
+	    "name": "Shintaro Sugimoto",
+	    "homepage": "https://github.com/withelmo",
+	    "role": "Author"
+	}
+    ]
+}
